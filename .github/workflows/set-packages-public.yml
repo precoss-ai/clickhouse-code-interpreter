@@ -1,0 +1,45 @@
+# One-shot: set org GHCR container packages public (GITHUB_TOKEN).
+# Org package visibility has no reliable public API; this may 404 — then use UI.
+name: Set packages public
+
+on:
+  workflow_dispatch:
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  public:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - codeapi-api
+          - codeapi-worker
+          - codeapi-sandbox-runner
+          - codeapi-file-server
+          - codeapi-tool-call-server
+          - codeapi-egress-gateway
+          - codeapi-package-init
+    steps:
+      - name: Set ${{ matrix.package }} public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ORG="${{ github.repository_owner }}"
+          PKG="${{ matrix.package }}"
+          STATUS="$(gh api "orgs/${ORG}/packages/container/${PKG}" --jq .visibility)"
+          echo "current: ${ORG}/${PKG} = ${STATUS}"
+          if [[ "$STATUS" == "public" ]]; then
+            echo "already public"
+            exit 0
+          fi
+          # SpareCores / helmforge pattern
+          gh api --method PATCH "orgs/${ORG}/packages/container/${PKG}" \
+            --field visibility=public
+          AFTER="$(gh api "orgs/${ORG}/packages/container/${PKG}" --jq .visibility)"
+          echo "after: ${AFTER}"
+          test "$AFTER" = public
