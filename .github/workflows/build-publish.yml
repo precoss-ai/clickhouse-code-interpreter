@@ -1,0 +1,169 @@
+# Build stock ClickHouse/code-interpreter images and push to public GHCR (arm64).
+name: Build and publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - UPSTREAM_SHA
+      - .github/workflows/build-publish.yml
+  workflow_dispatch:
+    inputs:
+      upstream_sha:
+        description: Upstream commit SHA (empty = UPSTREAM_SHA file)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: protom-gmbh
+  UPSTREAM_URL: https://github.com/ClickHouse/code-interpreter.git
+  PLATFORM: linux/arm64
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.pin.outputs.sha }}
+      tag: ${{ steps.pin.outputs.tag }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - id: pin
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ inputs.upstream_sha }}" ]]; then
+            SHA="${{ inputs.upstream_sha }}"
+          else
+            SHA="$(tr -d '[:space:]' < UPSTREAM_SHA)"
+          fi
+          if [[ ! "$SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+            echo "invalid upstream SHA: $SHA" >&2
+            exit 1
+          fi
+          SHORT="$(printf '%s' "$SHA" | cut -c1-12 | tr '[:upper:]' '[:lower:]')"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-$SHORT" >> "$GITHUB_OUTPUT"
+          echo "Building upstream $SHA → tag sha-$SHORT"
+
+  build:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: codeapi-api
+            dockerfile: service/Dockerfile.api
+          - name: codeapi-worker
+            dockerfile: service/Dockerfile.worker
+          - name: codeapi-sandbox-runner
+            dockerfile: api/Dockerfile
+            target: sandbox-runner
+          - name: codeapi-file-server
+            dockerfile: service/Dockerfile
+            target: production
+          - name: codeapi-tool-call-server
+            dockerfile: service/Dockerfile.tool-call-server
+            target: production
+          - name: codeapi-egress-gateway
+            dockerfile: service/Dockerfile.egress-gateway
+          - name: codeapi-package-init
+            dockerfile: docker/Dockerfile.package-init
+    steps:
+      - name: Clone upstream
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout "${{ env.UPSTREAM_URL }}" upstream
+          git -C upstream fetch --depth 1 origin "${{ needs.resolve.outputs.sha }}"
+          git -C upstream checkout --force "${{ needs.resolve.outputs.sha }}"
+
+      - uses: docker/setup-qemu-action@c1b4377ea2c8309d8334eae318dbc51965e9b5e6 # v3.7.0
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - uses: docker/login-action@5caad16a90f2a6491c94c9e10e5d5934e939c4a3 # v3.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.name }}
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c914d3d7383c7b6f9ed110 # v6.18.0
+        with:
+          context: upstream
+          file: upstream/${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          platforms: ${{ env.PLATFORM }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.name }}:${{ needs.resolve.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.name }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.resolve.outputs.sha }}
+            org.opencontainers.image.description=Unofficial linux/arm64 build of ClickHouse/code-interpreter (${{ matrix.name }})
+            org.opencontainers.image.title=${{ matrix.name }}
+          provenance: false
+          sbom: false
+
+      - name: Record digest
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.build.outputs.digest }}"
+          echo "${{ matrix.name }}=${DIGEST}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pushed ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.name }}@${DIGEST}"
+
+  publish-visibility:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Ensure packages are public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Org packages often default to private; best-effort make public.
+          for name in \
+            codeapi-api \
+            codeapi-worker \
+            codeapi-sandbox-runner \
+            codeapi-file-server \
+            codeapi-tool-call-server \
+            codeapi-egress-gateway \
+            codeapi-package-init
+          do
+            echo "visibility → public: $name"
+            gh api \
+              --method PUT \
+              -H "Accept: application/vnd.github+json" \
+              "/orgs/${{ env.IMAGE_OWNER }}/packages/container/${name}/visibility" \
+              -f visibility=public \
+              || echo "warn: could not set $name public (may need org Package admin once)"
+          done
+
+      - name: Summary
+        run: |
+          set -euo pipefail
+          {
+            echo "## Published tag \`${{ needs.resolve.outputs.tag }}\`"
+            echo
+            echo "Upstream: \`${{ needs.resolve.outputs.sha }}\`"
+            echo
+            echo "Images: \`ghcr.io/${{ env.IMAGE_OWNER }}/codeapi-*\`"
+          } >> "$GITHUB_STEP_SUMMARY"
