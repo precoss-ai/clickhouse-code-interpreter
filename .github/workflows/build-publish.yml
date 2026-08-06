@@ -126,37 +126,10 @@ jobs:
           echo "${{ matrix.name }}=${DIGEST}" >> "$GITHUB_STEP_SUMMARY"
           echo "Pushed ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.name }}@${DIGEST}"
 
-  publish-visibility:
+  publish-summary:
     needs: [resolve, build]
     runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
     steps:
-      - name: Ensure packages are public
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          # Org packages often default to private; best-effort make public.
-          for name in \
-            codeapi-api \
-            codeapi-worker \
-            codeapi-sandbox-runner \
-            codeapi-file-server \
-            codeapi-tool-call-server \
-            codeapi-egress-gateway \
-            codeapi-package-init
-          do
-            echo "visibility → public: $name"
-            gh api \
-              --method PUT \
-              -H "Accept: application/vnd.github+json" \
-              "/orgs/${{ env.IMAGE_OWNER }}/packages/container/${name}/visibility" \
-              -f visibility=public \
-              || echo "warn: could not set $name public (may need org Package admin once)"
-          done
-
       - name: Summary
         run: |
           set -euo pipefail
@@ -166,4 +139,8 @@ jobs:
             echo "Upstream: \`${{ needs.resolve.outputs.sha }}\`"
             echo
             echo "Images: \`ghcr.io/${{ env.IMAGE_OWNER }}/codeapi-*\`"
+            echo
+            echo "Org GHCR packages default to **private**. GitHub has no API to"
+            echo "change org package visibility — set each package to Public once"
+            echo "in the UI: https://github.com/orgs/${{ env.IMAGE_OWNER }}/packages"
           } >> "$GITHUB_STEP_SUMMARY"

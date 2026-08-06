@@ -29,6 +29,12 @@ Pull example:
 docker pull ghcr.io/protom-gmbh/codeapi-api:sha-4b72e9d01654
 ```
 
+**Visibility:** org GHCR packages are created **private**. GitHub provides no API
+to flip org package visibility — after the first successful publish, open each
+package under https://github.com/orgs/protom-gmbh/packages → Package settings →
+Change visibility → Public (one-time). Until then, consumers need a
+`read:packages` pull credential.
+
 ## Upstream pin
 
 [`UPSTREAM_SHA`](UPSTREAM_SHA) is the single source of truth.
