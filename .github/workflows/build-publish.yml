@@ -1,4 +1,5 @@
-# Build stock ClickHouse/code-interpreter images and push to public GHCR (arm64).
+# Build stock ClickHouse/code-interpreter images and push to public GHCR
+# (linux/amd64 + linux/arm64 multi-arch manifests).
 name: Build and publish
 
 on:
@@ -26,7 +27,8 @@ env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: protom-gmbh
   UPSTREAM_URL: https://github.com/ClickHouse/code-interpreter.git
-  PLATFORM: linux/arm64
+  # Multi-arch manifest list (QEMU for the non-native arch on ubuntu-latest).
+  PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   resolve:
@@ -52,12 +54,12 @@ jobs:
           SHORT="$(printf '%s' "$SHA" | cut -c1-12 | tr '[:upper:]' '[:lower:]')"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "tag=sha-$SHORT" >> "$GITHUB_OUTPUT"
-          echo "Building upstream $SHA → tag sha-$SHORT"
+          echo "Building upstream $SHA → tag sha-$SHORT (${PLATFORMS})"
 
   build:
     needs: resolve
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
@@ -106,7 +108,7 @@ jobs:
           context: upstream
           file: upstream/${{ matrix.dockerfile }}
           target: ${{ matrix.target || '' }}
-          platforms: ${{ env.PLATFORM }}
+          platforms: ${{ env.PLATFORMS }}
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.name }}:${{ needs.resolve.outputs.tag }}
@@ -114,7 +116,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ needs.resolve.outputs.sha }}
-            org.opencontainers.image.description=Unofficial linux/arm64 build of ClickHouse/code-interpreter (${{ matrix.name }})
+            org.opencontainers.image.description=Unofficial multi-arch (amd64/arm64) build of ClickHouse/code-interpreter (${{ matrix.name }})
             org.opencontainers.image.title=${{ matrix.name }}
           provenance: false
           sbom: false
@@ -125,6 +127,9 @@ jobs:
           DIGEST="${{ steps.build.outputs.digest }}"
           echo "${{ matrix.name }}=${DIGEST}" >> "$GITHUB_STEP_SUMMARY"
           echo "Pushed ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.name }}@${DIGEST}"
+          docker buildx imagetools inspect \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.name }}:${{ needs.resolve.outputs.tag }}" \
+            >> "$GITHUB_STEP_SUMMARY"
 
   publish-summary:
     needs: [resolve, build]
@@ -138,9 +143,11 @@ jobs:
             echo
             echo "Upstream: \`${{ needs.resolve.outputs.sha }}\`"
             echo
+            echo "Platforms: \`${{ env.PLATFORMS }}\`"
+            echo
             echo "Images: \`ghcr.io/${{ env.IMAGE_OWNER }}/codeapi-*\`"
             echo
-            echo "Org GHCR packages default to **private**. GitHub has no API to"
-            echo "change org package visibility — set each package to Public once"
-            echo "in the UI: https://github.com/orgs/${{ env.IMAGE_OWNER }}/packages"
+            echo "Org GHCR packages default to **private**. If a new package name"
+            echo "appears, set it Public once in the UI (no API):"
+            echo "https://github.com/orgs/${{ env.IMAGE_OWNER }}/packages"
           } >> "$GITHUB_STEP_SUMMARY"

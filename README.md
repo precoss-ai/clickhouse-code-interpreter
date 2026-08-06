@@ -1,7 +1,7 @@
 # clickhouse-code-interpreter (unofficial builds)
 
 CI builds of [ClickHouse/code-interpreter](https://github.com/ClickHouse/code-interpreter)
-published to GHCR for `linux/arm64` (OCI Ampere and similar).
+published to GHCR as **multi-arch** images (`linux/amd64` + `linux/arm64`).
 
 **Not affiliated with ClickHouse.** Images are stock upstream Dockerfiles at a
 pinned commit; this repo only holds the build workflow and pin.
@@ -23,17 +23,17 @@ Tags:
 - `sha-<12>` — immutable tag from the upstream commit (preferred)
 - `latest` — moves with the pin on `main`
 
-Pull example:
+Each tag is a multi-arch manifest list. Clients pick `amd64` or `arm64`
+automatically.
 
 ```bash
 docker pull ghcr.io/protom-gmbh/codeapi-api:sha-4b72e9d01654
+docker buildx imagetools inspect ghcr.io/protom-gmbh/codeapi-api:sha-4b72e9d01654
 ```
 
 **Visibility:** org GHCR packages are created **private**. GitHub provides no API
-to flip org package visibility — after the first successful publish, open each
-package under https://github.com/orgs/protom-gmbh/packages → Package settings →
-Change visibility → Public (one-time). Until then, consumers need a
-`read:packages` pull credential.
+to flip org package visibility — after the first successful publish of a *new*
+package name, open Package settings → Change visibility → Public (one-time).
 
 ## Upstream pin
 
