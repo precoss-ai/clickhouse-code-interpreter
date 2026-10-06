@@ -25,7 +25,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_OWNER: protom-gmbh
+  IMAGE_OWNER: precoss-ai
   UPSTREAM_URL: https://github.com/ClickHouse/code-interpreter.git
   # Multi-arch manifest list (QEMU for the non-native arch on ubuntu-latest).
   PLATFORMS: linux/amd64,linux/arm64

@@ -10,13 +10,13 @@ pinned commit; this repo only holds the build workflow and pin.
 
 | Image | GHCR |
 |---|---|
-| API | `ghcr.io/protom-gmbh/codeapi-api` |
-| Worker | `ghcr.io/protom-gmbh/codeapi-worker` |
-| Sandbox runner | `ghcr.io/protom-gmbh/codeapi-sandbox-runner` |
-| File server | `ghcr.io/protom-gmbh/codeapi-file-server` |
-| Tool call server | `ghcr.io/protom-gmbh/codeapi-tool-call-server` |
-| Egress gateway | `ghcr.io/protom-gmbh/codeapi-egress-gateway` |
-| Package init | `ghcr.io/protom-gmbh/codeapi-package-init` |
+| API | `ghcr.io/precoss-ai/codeapi-api` |
+| Worker | `ghcr.io/precoss-ai/codeapi-worker` |
+| Sandbox runner | `ghcr.io/precoss-ai/codeapi-sandbox-runner` |
+| File server | `ghcr.io/precoss-ai/codeapi-file-server` |
+| Tool call server | `ghcr.io/precoss-ai/codeapi-tool-call-server` |
+| Egress gateway | `ghcr.io/precoss-ai/codeapi-egress-gateway` |
+| Package init | `ghcr.io/precoss-ai/codeapi-package-init` |
 
 Tags:
 
@@ -27,8 +27,8 @@ Each tag is a multi-arch manifest list. Clients pick `amd64` or `arm64`
 automatically.
 
 ```bash
-docker pull ghcr.io/protom-gmbh/codeapi-api:sha-4b72e9d01654
-docker buildx imagetools inspect ghcr.io/protom-gmbh/codeapi-api:sha-4b72e9d01654
+docker pull ghcr.io/precoss-ai/codeapi-api:sha-4b72e9d01654
+docker buildx imagetools inspect ghcr.io/precoss-ai/codeapi-api:sha-4b72e9d01654
 ```
 
 **Visibility:** org GHCR packages are created **private**. GitHub provides no API
